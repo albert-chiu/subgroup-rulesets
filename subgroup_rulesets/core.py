@@ -1,4 +1,20 @@
-class subgroup_rulesets(object):
+import pandas as pd
+import numpy as np
+from numpy.random import random
+import itertools
+from itertools import chain, combinations
+from bisect import bisect_left
+from random import sample, seed
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from collections import Counter, defaultdict
+from scipy.sparse import csc_matrix
+import scipy.stats as statsmath
+import time
+from copy import deepcopy
+
+
+class SubgroupRuleset(object):
     def __init__(self, X, ITE, print_message=False):
         self.df = X
         self.Y = deepcopy(ITE)
@@ -11,32 +27,20 @@ class subgroup_rulesets(object):
         neg_df = 1-self.df #df has negative associations
         neg_df.columns = [name.strip() + '_neg' for name in self.df.columns]
         df = pd.concat([self.df,neg_df], axis = 1)
-        if method =='fpgrowth' and maxlen<=3:
-            itemMatrix = [[item for item in df.columns if row[item] ==1] for i,row in df.iterrows() ]
-            pindex = np.where(self.Y==1)[0]
-            nindex = np.where(self.Y!=1)[0]
-            if self.print_message:
-                print('Generating rules using fpgrowth')
-            start_time = time.time()
-            rules= fpgrowth([itemMatrix[i] for i in pindex],supp = supp,zmin = 1,zmax = maxlen)
-            rules = [tuple(np.sort(rule[0])) for rule in rules]
-            rules = list(set(rules))
-            start_time = time.time()
-            if self.print_message:
-                print('\tTook %0.3fs to generate %d rules' % (time.time() - start_time, len(rules)))
-        else:
+        if method == 'randomForest':
             rules = []
             start_time = time.time()
             for length in range(1,maxlen+1,1):
                 n_estimators = min(pow(df.shape[1],length),4000)
                 clf = RandomForestClassifier(n_estimators = n_estimators,max_depth = length)
-                #clf = RandomForestRegressor(n_estimators = n_estimators,max_depth = length)
                 clf.fit(self.df,self.Ytilde)
                 for n in range(n_estimators):
                     rules.extend(extract_rules(clf.estimators_[n],df.columns))
             rules = sorted([list(x) for x in set(tuple(x) for x in rules)])
             if self.print_message:
                 print('\tTook %0.3fs to generate %d rules' % (time.time() - start_time, len(rules)))
+        else:
+            raise ValueError('Method not recognized. Currently only "randomForest" is supported.')
         self.screen_rules(rules,df,N) # select the top N rules using secondary criteria, information gain
         self.cond_names = self.df.columns.append(neg_df.columns)
         
@@ -78,7 +82,6 @@ class subgroup_rulesets(object):
     def find_soln(self, Niteration = 5000, Nchain = 3, q = 0.1, fg_scale=5, fg_switch=.5, eta=0.95, init = []):
         all_obfn_vals = defaultdict(list)
         all_acpt_probs = defaultdict(list)
-        all_deltas = defaultdict(list)
         # print 'Searching for an optimal solution...'
 
         nRules = len(self.rules)
@@ -132,22 +135,15 @@ class subgroup_rulesets(object):
                 #T = T0**(1 - iter/Niteration)
                 pt_new = loss
                 delta = pt_new - pt_curr
-                all_deltas[chain].append(delta)
-                if False:#if iter < Niteration*.1 and np.isfinite(delta):
-                    all_deltas[chain].append(delta)
-                    if len(all_deltas[chain]) > 10:
-                        T0 = np.percentile(np.abs(all_deltas[chain]), 75)
-                    #print("delta stats:", np.min(deltas), np.max(deltas), np.percentile(deltas, [25, 50, 75]))
                 T = T0*(eta ** iter) #T0 ** (1-iter/Niteration) ## # # #
-                alpha = np.exp(float(delta)/T)  # acceptance probability
-#                print(f"new:{pt_new}, curr:{pt_curr}, alpha:{alpha}")
-                all_acpt_probs[chain].append(min(1, alpha))
+                gamma = np.exp(float(delta)/T)  # acceptance probability
+                all_acpt_probs[chain].append(min(1, gamma))
                 
                 if pt_new > maps[chain][-1][1]:
                     maps[chain].append([iter,loss,rules_new,[self.rules[i] for i in rules_new]])
                     if self.print_message:
                         print('\n** chain = {}, max at iter = {} ** \n loss = {}, rule = {}'.format(chain, iter, loss, rules_new))
-                if random() <= alpha:
+                if random() <= gamma:
                     rules_curr_norm,rules_curr,pt_curr = rules_norm[:],rules_new[:],pt_new
                     all_obfn_vals[chain].append(loss)
         pt_max = [maps[chain][-1][1] for chain in range(Nchain)]
@@ -155,7 +151,7 @@ class subgroup_rulesets(object):
         # print '\tTook %0.3fs to generate an optimal rule set' % (time.time() - start_time)
         final_soln = maps[index][-1][3]
         
-        return final_soln, all_obfn_vals, all_acpt_probs, all_deltas
+        return final_soln, all_obfn_vals, all_acpt_probs
         
     def propose(self, rules_curr,rules_norm,q,fg):
         nRules = len(self.rules)
@@ -284,8 +280,6 @@ class subgroup_rulesets(object):
                         move = ['add']
                     else: 
                         move = ['cut', 'add'] # replace
-                else: # no possible rules to add
-                    move = ['clean']
             elif p_add ==0 or complex_budget < self.maxlen: # at least two rules AND (no rules to add OR adding rule would make too complex, and 
                 if random() < 0.5:
                     move = ['cut']
@@ -336,18 +330,6 @@ class subgroup_rulesets(object):
                     rules_curr = neighbors[max(neighbors.keys())]  
                     rules_norm = self.normalize(rules_curr)
 
-                if len(move)>0 and move[0]=='clean':
-                    remove = []
-                    for i,rule in enumerate(rules_norm):
-                        Yhat = (np.sum(self.RMatrix[:,[rule for j,rule in enumerate(rules_norm) if (j!=i and j not in remove)]],axis = 1)>0).astype(int)
-                        TP,FP,TN,FN = getConfusion(Yhat,self.Y)
-                        if TP+FP==0:
-                            remove.append(i)
-                    for x in remove:
-                        if (x in rules_norm):
-                            rules_norm.remove(x)
-                    return rules_curr, rules_norm
-                
                 ######
                 end = time.perf_counter()
 

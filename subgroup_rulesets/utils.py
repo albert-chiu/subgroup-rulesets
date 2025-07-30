@@ -1,3 +1,8 @@
+import numpy as np
+import operator
+from bisect import bisect_left
+
+
 def extract_rules(tree, feature_names):
     left      = tree.tree_.children_left
     right     = tree.tree_.children_right
