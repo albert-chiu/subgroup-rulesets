@@ -11,6 +11,10 @@ setup(
         "scipy",
         "matplotlib",
     ],
+    package_data={
+        'subgroup_rulesets': ['data/*.csv', 'data/*.pkl', 'data/*.json'],
+    },
+    include_package_data=True,
     author="Albert Chiu",
     description="A package for discovering interpretable subgroups in data using rulesets.",
     long_description=open("README.md").read(),

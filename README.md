@@ -61,7 +61,7 @@ srs.generate_rules(threshold=c,maxlen=maxlen,N=N)
 alphas = np.linspace(0, 1, 11)  # Values of hyperparameter determining tradeoff between group and effect size to try
 all_rulesets = {}
 for alpha in alphas: 
-    srs.set_parameter(alpha=alpha, maxcomplex=maxcomplexity)
+    srs.set_parameters(alpha=alpha, maxcomplex=maxcomplexity)
     all_rulesets[alpha], temp_map_objfn, temp_map_acpt = srs.find_soln(Niteration=250,Nchain=2,fg_switch=.7)
 
 # Print discovered rules
@@ -75,7 +75,7 @@ print({alpha: [get_stats(df, ITE, this_rs)[0], get_stats(df, ITE, this_rs)[1]] f
 The algorithm optimizes an objective function that trades off subgroup size and treatment effect magnitude:
 
 ```
-Objective = (subgroup_size / total_size)^α × normalized_effect_size
+Objective = (subgroup_size / total_sample_size)^α × normalized_effect_size
 ```
 
 Where `α` controls the trade-off between finding large subgroups versus subgroups with strong treatment effects. Larger `α` places a greater emphasis on group size. In practice, you may want to try a variety of values to generate a frontier of rule sets. I suggest doing a linear search across a range of values in [0,1] first and checking the group and effect size of the resulting rule sets to get a sense of which values of `α` correspond to which points on the frontier and adjusting from there.

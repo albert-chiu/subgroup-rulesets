@@ -12,6 +12,7 @@ from scipy.sparse import csc_matrix
 import scipy.stats as statsmath
 import time
 from copy import deepcopy
+from .utils import extract_rules, accumulate, find_lt
 
 
 class SubgroupRuleset(object):
@@ -160,9 +161,6 @@ class SubgroupRuleset(object):
 #        fg=random() < 0.5
 #        fg=False
         if fg:
-            #######
-            start = time.perf_counter()
-            #######
             rs_expanded = [deepcopy(self.rules[i]) for i in rules_curr]  # rs as a [] of [conditions]
             if complex_budget == 0:  # if at max complexity, don't choose a rule with length 1 (can't cut or add condition)
                 index=sample([x for x in range(len_rs) if len(rs_expanded[x])>1],1)[0]
@@ -247,22 +245,9 @@ class SubgroupRuleset(object):
                         print(neighbors)
                     rules_curr = [self.rules.index(x) for x in neighbors[max(neighbors.keys())]]
                 rules_norm = self.normalize(rules_curr)
-                
-                
-                ###
-            end = time.perf_counter()
-
-            self.total_time_a += (end - start)
-            self.count_a += 1
-                ###
 
                 
         else: 
-            
-            ######
-            start = time.perf_counter()
-            ######
-            
             covered = (np.sum(self.RMatrix[:,rules_curr],axis = 1)>0).astype(int)
             higher_uncovered = np.where((self.Ytilde==1) & [1-x for x in covered])[0] # uncovered examples with effect > threshold
 
@@ -329,13 +314,6 @@ class SubgroupRuleset(object):
                         neighbors[self.compute_objfn(dupe)] = dupe
                     rules_curr = neighbors[max(neighbors.keys())]  
                     rules_norm = self.normalize(rules_curr)
-
-                ######
-                end = time.perf_counter()
-
-                self.total_time_b += (end - start)
-                self.count_b += 1
-                ######
                 
         return rules_curr, rules_norm
 
