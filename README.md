@@ -93,7 +93,7 @@ Where `α` controls the trade-off between finding large subgroups versus subgrou
 
 For detailed documentation, examples, and API reference, see:
 - [Examples](examples/) - Jupyter notebooks with detailed use cases
-- [API Documentation](docs/) - Complete function and class references
+- [API Documentation](docs/) - To do: Complete function and class references
 - [Paper](https://arxiv.org/abs/2507.09494) - Explanation of algorithm and empirical validation
 
 ## Citation
