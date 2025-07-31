@@ -39,6 +39,7 @@ pip install -e .
 import numpy as np
 import pandas as pd
 from subgroup_rulesets import SubgroupRuleset
+from subgroup_rulesets.utils import get_stats
 
 # Load your data with features X, treatment tau, and outcome Y
 df = pd.DataFrame(...)  # Feature matrix
